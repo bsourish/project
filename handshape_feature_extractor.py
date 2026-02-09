@@ -24,8 +24,18 @@ class HandShapeFeatureExtractor:
 
     def __init__(self):
         if HandShapeFeatureExtractor.__single is None:
-            #real_model = load_model(os.path.join(BASE, 'cnn_model.h5'))
-            real_model = load_model(os.path.join(BASE, 'cnn.h5'))
+            model_path = os.path.join(BASE, 'cnn.h5')
+            try:
+                # Try loading with compile=False for newer Keras versions
+                real_model = load_model(model_path, compile=False)
+            except (ValueError, TypeError) as e:
+                # Model structure incompatibility - try with custom_objects
+                print(f"Model loading warning: {str(e)}")
+                try:
+                    real_model = load_model(model_path, compile=False, custom_objects=None)
+                except Exception as e2:
+                    raise RuntimeError(f"Unable to load model file: {model_path}. Error: {str(e2)}")
+            
             self.model = real_model
             HandShapeFeatureExtractor.__single = self
 
