@@ -1,4 +1,3 @@
-__pycache__/
 *.pyc
 *.pyo
 *.pyd
@@ -22,8 +21,4 @@ wheels/
 .coverage
 htmlcov/
 .env
-.venv
 env/
-venv/
-frameextractor.py
-test/

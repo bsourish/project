@@ -16,32 +16,62 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TRAIN_DIR = os.path.join(BASE_DIR, "traindata")
 TEST_DIR = os.path.join(BASE_DIR, "test", "TestData")
 
+
+def _list_videos(preferred_dir, fallback_dirs=None):
+    def _list_in_dir(d):
+        if not os.path.isdir(d):
+            return []
+        return [f for f in os.listdir(d) if f.lower().endswith(".mp4")]
+
+    videos = _list_in_dir(preferred_dir)
+    if videos:
+        return preferred_dir, videos
+
+    if fallback_dirs:
+        for d in fallback_dirs:
+            videos = _list_in_dir(d)
+            if videos:
+                return d, videos
+            # If this is a container folder, search recursively once
+            if os.path.isdir(d):
+                found = []
+                for root, _, files in os.walk(d):
+                    for f in files:
+                        if f.lower().endswith(".mp4"):
+                            found.append(os.path.join(root, f))
+                if found:
+                    return None, found  # full paths
+
+    return preferred_dir, []
+
 # =============================================================================
 # Get the penultimate layer for trainig data
 # =============================================================================
 # your code goes here
-# Extract the middle frame of each gesture video
-def _get_middle_frame_gray(video_path):
+# Extract multiple evenly spaced color frames for robustness
+def _get_sample_frames_color(video_path, num_samples=5):
     cap = cv2.VideoCapture(video_path)
     try:
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         if total_frames <= 0:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            ret, frame = cap.read()
+            indices = [0]
         else:
-            middle = total_frames // 2
-            cap.set(cv2.CAP_PROP_POS_FRAMES, middle)
+            if num_samples < 1:
+                num_samples = 1
+            step = max(total_frames // num_samples, 1)
+            indices = [min(i * step, total_frames - 1) for i in range(num_samples)]
+
+        frames = []
+        for idx in indices:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
             ret, frame = cap.read()
-            if not ret:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                ret, frame = cap.read()
-        if not ret or frame is None:
-            raise RuntimeError(f"Could not read frame from {video_path}")
-        if len(frame.shape) == 3 and frame.shape[2] == 3:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        else:
-            gray = frame
-        return gray
+            if not ret or frame is None:
+                continue
+            frames.append(frame)
+
+        if not frames:
+            raise RuntimeError(f"Could not read frames from {video_path}")
+        return frames
     finally:
         cap.release()
 
@@ -62,9 +92,10 @@ if os.path.isdir(TRAIN_DIR):
     train_videos.sort()
     for fname in train_videos:
         fpath = os.path.join(TRAIN_DIR, fname)
-        frame_gray = _get_middle_frame_gray(fpath)
-        feature = extractor.extract_feature(frame_gray)
-        train_feature_vectors.append(feature.reshape(-1))
+        frames = _get_sample_frames_color(fpath, num_samples=5)
+        feats = [extractor.extract_feature(fr).reshape(-1) for fr in frames]
+        feature = np.mean(feats, axis=0)
+        train_feature_vectors.append(feature)
         train_labels.append(_label_from_filename(fname))
 
 train_feature_vectors = np.array(train_feature_vectors)
@@ -82,15 +113,32 @@ test_feature_vectors = []
 test_labels = []
 test_filenames = []
 
-if os.path.isdir(TEST_DIR):
+test_dir, test_videos = _list_videos(
+    TEST_DIR,
+    fallback_dirs=[
+        os.path.join(BASE_DIR, "TestData"),
+        os.path.join(BASE_DIR, "test"),
+        os.path.join(BASE_DIR, "test", "testdata"),
+        os.path.join(BASE_DIR, "test", "TestData"),
+    ],
+)
+
+if test_videos:
     extractor = HandShapeFeatureExtractor.get_instance()
-    test_videos = [f for f in os.listdir(TEST_DIR) if f.lower().endswith(".mp4")]
-    test_videos.sort()
-    for fname in test_videos:
-        fpath = os.path.join(TEST_DIR, fname)
-        frame_gray = _get_middle_frame_gray(fpath)
-        feature = extractor.extract_feature(frame_gray)
-        test_feature_vectors.append(feature.reshape(-1))
+    # If test_videos are full paths from recursive search, keep as-is.
+    if test_dir is not None:
+        test_videos.sort()
+        video_paths = [os.path.join(test_dir, f) for f in test_videos]
+        video_names = test_videos
+    else:
+        video_paths = test_videos
+        video_names = [os.path.basename(p) for p in test_videos]
+
+    for fpath, fname in zip(video_paths, video_names):
+        frames = _get_sample_frames_color(fpath, num_samples=5)
+        feats = [extractor.extract_feature(fr).reshape(-1) for fr in frames]
+        feature = np.mean(feats, axis=0)
+        test_feature_vectors.append(feature)
         test_labels.append(_label_from_filename(fname))
         test_filenames.append(fname)
 
@@ -144,7 +192,7 @@ if train_feature_vectors.size > 0 and test_feature_vectors.size > 0:
             raise ValueError(f"Unknown gesture label: {best_label}")
         results.append(output_label_map[best_label])
 
-    results_path = "Results.csv"
-    with open(results_path, "w") as f:
-        for label in results:
-            f.write(f"{label}\n")
+results_path = "Results.csv"
+with open(results_path, "w") as f:
+    for label in results:
+        f.write(f"{label}\n")

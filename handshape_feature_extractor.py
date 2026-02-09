@@ -54,9 +54,12 @@ class HandShapeFeatureExtractor:
         try:
             img = cv2.resize(crop, (300, 300))
             img_arr = np.array(img) / 255.0
-            img_arr=np.stack((img_arr,)*3,axis=-1)
-            #img_arr = img_arr.reshape(1, 200, 200, 1)
-            img_arr = img_arr.reshape(1,300, 300,3)
+            # Ensure 3-channel input: expand grayscale or drop alpha if present
+            if img_arr.ndim == 2:
+                img_arr = np.stack((img_arr,) * 3, axis=-1)
+            elif img_arr.ndim == 3 and img_arr.shape[2] == 4:
+                img_arr = img_arr[:, :, :3]
+            img_arr = img_arr.reshape(1, 300, 300, 3)
             return img_arr
         except Exception as e:
             print(str(e))
