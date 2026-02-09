@@ -24,8 +24,19 @@ class HandShapeFeatureExtractor:
 
     def __init__(self):
         if HandShapeFeatureExtractor.__single is None:
-            #real_model = load_model(os.path.join(BASE, 'cnn_model.h5'))
-            real_model = load_model(os.path.join(BASE, 'gestures_trained_cnn_model.h5'), compile=False, safe_mode=False)
+            model_path = os.path.join(BASE, 'gestures_trained_cnn_model.h5')
+            try:
+                # Try loading with compile=False for newer Keras versions
+                # This avoids shape mismatch issues during model deserialization
+                real_model = load_model(model_path, compile=False)
+            except (ValueError, TypeError) as e:
+                # If that fails, try without safe_mode for older compatibility
+                try:
+                    real_model = load_model(model_path, compile=False, safe_mode=False)
+                except TypeError:
+                    # safe_mode parameter doesn't exist in this version, just use compile=False
+                    real_model = load_model(model_path, compile=False)
+            
             self.model = real_model
             HandShapeFeatureExtractor.__single = self
 
@@ -69,6 +80,6 @@ class HandShapeFeatureExtractor:
             #print(image.shape)
             img_arr = self.__pre_process_input_image(image)
             # input = tf.keras.Input(tensor=image)
-            return self.model.predict(img_arr)
+            return self.model.predict(img_arr, verbose=0)
         except Exception as e:
             raise
