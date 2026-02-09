@@ -24,27 +24,8 @@ class HandShapeFeatureExtractor:
 
     def __init__(self):
         if HandShapeFeatureExtractor.__single is None:
-            model_path = os.path.join(BASE, 'gestures_trained_cnn_model.h5')
-            try:
-                # Try loading with compile=False for newer Keras versions
-                real_model = load_model(model_path, compile=False)
-            except ValueError as e:
-                # Model structure incompatibility - try loading weights only approach
-                print(f"Model compatibility warning: {str(e)}")
-                print("Attempting to load weights separately...")
-                try:
-                    # Try with safe_mode=False for old model format
-                    real_model = load_model(model_path, compile=False, safe_mode=False)
-                except (ValueError, TypeError, AttributeError) as e2:
-                    print(f"Failed to load model: {str(e2)}")
-                    raise RuntimeError(f"Unable to load model file: {model_path}. The model may be incompatible with the current TensorFlow version.")
-            except (TypeError, AttributeError) as e:
-                # If safe_mode parameter doesn't exist, just use compile=False
-                try:
-                    real_model = load_model(model_path, compile=False)
-                except Exception as e3:
-                    raise RuntimeError(f"Unable to load model file: {model_path}. Error: {str(e3)}")
-            
+            #real_model = load_model(os.path.join(BASE, 'cnn_model.h5'))
+            real_model = load_model(os.path.join(BASE, 'cnn.h5'))
             self.model = real_model
             HandShapeFeatureExtractor.__single = self
 
@@ -88,6 +69,7 @@ class HandShapeFeatureExtractor:
             #print(image.shape)
             img_arr = self.__pre_process_input_image(image)
             # input = tf.keras.Input(tensor=image)
-            return self.model.predict(img_arr, verbose=0)
+            return self.model.predict(img_arr)
         except Exception as e:
             raise
+
