@@ -36,7 +36,13 @@ class HandShapeFeatureExtractor:
                 except Exception as e2:
                     raise RuntimeError(f"Unable to load model file: {model_path}. Error: {str(e2)}")
             
-            self.model = real_model
+            # Use penultimate layer as feature extractor (per assignment spec)
+            try:
+                penult = real_model.layers[-2].output
+                self.model = Model(inputs=real_model.input, outputs=penult)
+            except Exception:
+                # Fallback to full model if structure is unexpected
+                self.model = real_model
             HandShapeFeatureExtractor.__single = self
 
         else:
